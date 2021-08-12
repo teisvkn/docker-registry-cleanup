@@ -1,0 +1,20 @@
+{
+    "name": "teisvkn/docker-registry-cleanup",
+    "description": "A tool to help delete old tags of images.",
+    "type": "project",
+    "require": {
+        "league/climate": "^3.7"
+    },
+    "license": "mit",
+    "autoload": {
+        "psr-4": {
+            "Teisvkn\\DockerRegistryCleanup\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Teis V. K. Egebo",
+            "email": "teis@splonkybits.dk"
+        }
+    ]
+}
