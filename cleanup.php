@@ -19,13 +19,6 @@ $climate->arguments->add([
 		'description' => 'number of versions to keep',
 		'required' => true,
 		'castTo' => 'int'
-	],
-	'delete' => [
-		'longPrefix' => 'delete',
-		'description' => 'delete old tags',
-		'required' => false,
-		'defaultValue' => false,
-		'castTo' => 'bool'
 	]
 ]);
 
@@ -45,16 +38,11 @@ $climate->out('Will keep ' . $keep . ' latest tag(s) of each image.');
 
 // Setup the Registry
 $registry = new Registry(
-	$url, 
+    $climate,
+	$url,
 	$keep
 );
 
-if ($climate->arguments->get('delete')) {
-	$input = $climate->confirm('Do you really want to delete tags, as we go along?');
-	if ($input->confirmed()) {
-		$registry->enableDelete();
-	}
-}
 
 // Start the show.
 $registry->execute();

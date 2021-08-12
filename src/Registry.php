@@ -7,46 +7,67 @@ class Registry {
 
 	private $url;
 
-	private $isDeleteEnabled = false;
-
 	private $noVersionsToKeep;
 
-	function __construct($url, $noVersionsToKeep) {
+	private $deleteCollection = [];
+
+    /**
+     * An instance of CLImate
+     *
+     * @var \League\CLImate\CLImate $climate
+     */
+    public $climate;
+
+	function __construct(\League\CLImate\CLImate $climate, $url, $noVersionsToKeep ) {
 		$this->url = $url;
         $this->noVersionsToKeep = $noVersionsToKeep;
         $this->client = new \GuzzleHttp\Client();
+        $this->climate = $climate;
 	}
-
-	public function enableDelete() {
-		$this->isDeleteEnabled = true;
-	}
-
+	
 	public function execute() {
-		$data = $this->getJson("/v2/_catalog");
+		$data = $this->getJson('/v2/_catalog');
 
         foreach ($data['repositories'] as $repository) {
-			echo $repository . ":" . PHP_EOL;
+			$this->climate->out("{$repository}:");
 
 			$tags = $this->tags($repository);
 
 			$count = 0;
 			foreach ($tags as $tag) {
-                echo ' - ' . $tag;
-				if ($count < $this->noVersionsToKeep) {
-					echo ' (keep)';
+                if ($count < $this->noVersionsToKeep) {
+				    $this->climate->tab()->green($tag);
 				} else {
-					echo ' (delete)';
-					if ($this->isDeleteEnabled === true) {
-						$this->delete($repository, $tag);
-					}
+				    $this->deleteCollection[$repository][] = $tag;
+				    $this->climate->tab()->red($tag);
 				}
-				echo PHP_EOL;
 
 				$count++;
 			}
 
-			echo PHP_EOL;
+			$this->climate->br();
 		}
+
+        if (count($this->deleteCollection)) {
+            // output delete plan
+            $this->climate->br();
+            $this->climate->red("Found something to delete:");
+            foreach ($this->deleteCollection as $repository => $tags) {
+                foreach($tags as $tag) {
+                    $this->climate->tab()->red("{$repository}:{$tag}");
+                }
+            }
+            // confirm
+            $input = $this->climate->confirm('Do you really want to delete them?');
+            if ($input->confirmed()) {
+                foreach ($this->deleteCollection as $repository => $tags) {
+                    foreach ($tags as $tag) {
+                         $this->delete($repository, $tag);
+                    }
+                }
+            }
+
+        }
 	}
 
 	/**
@@ -120,9 +141,11 @@ class Registry {
 	 */
 	private function delete($repository, $tag) {
         $reference = $this->getContentDigestHeader($repository, $tag);
-		echo "    - reference: {$reference}...";
-		 $this->client->delete("{$this->url}/v2/{$repository}/manifests/{$reference}");
-		echo "DELETED" . PHP_EOL;
+		$this->climate->tab(2)->inline("- reference: {$reference}...");
+//
+//		$this->client->delete("{$this->url}/v2/{$repository}/manifests/{$reference}");
+//
+		$this->climate->red("DELETED");
 	}
 
 
