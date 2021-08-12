@@ -3,15 +3,18 @@
 namespace Teisvkn\DockerRegistryCleanup;
 
 class Registry {
-	private $registryUrl;
+    private $client;
+
+	private $url;
 
 	private $isDeleteEnabled = false;
 
 	private $noVersionsToKeep;
 
-	function __construct($registryUrl, $noVersionsToKeep) {
-		$this->url = $registryUrl;
+	function __construct($url, $noVersionsToKeep) {
+		$this->url = $url;
         $this->noVersionsToKeep = $noVersionsToKeep;
+        $this->client = new \GuzzleHttp\Client();
 	}
 
 	public function enableDelete() {
@@ -28,7 +31,7 @@ class Registry {
 
 			$count = 0;
 			foreach ($tags as $tag) {
-				echo ' - ' . $tag;
+                echo ' - ' . $tag;
 				if ($count < $this->noVersionsToKeep) {
 					echo ' (keep)';
 				} else {
@@ -98,24 +101,15 @@ class Registry {
 	 * Does a GET request and decodes json response data.
 	 *
 	 * @param string $path
-	 * @param array $headers
 	 * @return array
 	 */
-	private function getJson($path, $headers = []) {
-		return json_decode($this->request($path, 'GET', $headers), true);
+	private function getJson($path) {
+        return json_decode(
+            (string)$this->client->get("{$this->url}{$path}")->getBody(),
+            true
+        );
 	}
 
-	/**
-	 * Does a request
-	 *
-	 * @param string $path
-	 * @param string $method
-	 * @param array $headers
-	 * @return string
-	 */
-	private function request($path, $method = 'GET', $headers = []) {
-		return file_get_contents("{$this->url}{$path}", false, $this->streamContext($headers, $method));
-	}
 
 	/**
 	 * Delete the image tag
@@ -125,24 +119,42 @@ class Registry {
 	 * @return void
 	 */
 	private function delete($repository, $tag) {
-		$manifestHeaders  = get_headers("{$this->url}/v2/{$repository}/manifests/{$tag}", 1, $this->streamContext(
-			['Accept: application/vnd.docker.distribution.manifest.v2+json'], 
-			'HEAD'
-		));
-		$reference = $manifestHeaders['Docker-Content-Digest'];
+        $reference = $this->getContentDigestHeader($repository, $tag);
 		echo "    - reference: {$reference}...";
-		// $this->request("/v2/{$repository}/manifests/{$reference}", 'DELETE');
+		 $this->client->delete("{$this->url}/v2/{$repository}/manifests/{$reference}");
 		echo "DELETED" . PHP_EOL;
-		// var_dump($this->request("/v2/{$repository}/manifests/{$reference}", 'GET'));
 	}
 
 
-	private function streamContext($headers, $method = 'GET') {
-		return stream_context_create([
-			'http' => [
-				'header' => implode('\r\n', $headers),
-				'method' => $method
-			]
-		]);
+    /**
+     *
+     * Note from https://docs.docker.com/registry/spec/api/#deleting-an-image
+     * ---
+     *   When deleting a manifest from a registry version 2.3 or later,
+     *   the following header must be used when HEAD or GET-ing the manifest
+     *   to obtain the correct digest to delete:
+     *      Accept: application/vnd.docker.distribution.manifest.v2+json"
+     * ---
+     *
+     * @param $repository
+     * @param $tag
+     * @return string
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    private function getContentDigestHeader($repository, $tag)
+    {
+        $response = $this->client->head(
+            "{$this->url}/v2/{$repository}/manifests/{$tag}",
+            ['headers' => ['Accept' => 'application/vnd.docker.distribution.manifest.v2+json']]
+        );
+
+        $referenceHeaderName = 'Docker-Content-Digest';
+
+        if (!$response->hasHeader($referenceHeaderName)) {
+            throw new \Exception('Failed fetching the header \'' . $referenceHeaderName . '\' as reference to the tag \'' . $tag . '\'');
+        }
+
+        return $response->getHeader($referenceHeaderName)[0];
 	}
+
 }

@@ -3,7 +3,9 @@
     "description": "A tool to help delete old tags of images.",
     "type": "project",
     "require": {
-        "league/climate": "^3.7"
+        "league/climate": "^3.7",
+        "guzzlehttp/guzzle": "^7.0",
+      "ext-json": "*"
     },
     "license": "mit",
     "autoload": {
